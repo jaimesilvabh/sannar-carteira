@@ -1,0 +1,9 @@
+node_modules/
+dist/
+build/
+*.log
+.env
+!server/.env.example
+**/data/*.db
+**/data/*.db-journal
+.DS_Store

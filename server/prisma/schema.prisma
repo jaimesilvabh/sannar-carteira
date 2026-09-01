@@ -1,0 +1,264 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Núcleos e usuários de login
+// ---------------------------------------------------------------------------
+
+model Nucleo {
+  id   String @id @default(cuid())
+  nome String @unique
+
+  criterios         CriterioCliente[]
+  faixasCliente     FaixaNivelCliente[]
+  faixasColaborador FaixaNivelColaborador[]
+  regras            RegraCorrespondencia[]
+  clientesNucleo    ClienteNucleo[]
+  colaboradores     Colaborador[]
+  pontuacoes        PontuacaoCriterioCliente[]
+  alocacoes         Alocacao[]
+  users             User[]
+  tiposCliente      TipoCliente[]
+  clienteTipos      ClienteTipo[]
+}
+
+// role: DIRECAO | LIDER_NUCLEO
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  nome         String
+  role         String
+  nucleoId     String?
+  nucleo       Nucleo?  @relation(fields: [nucleoId], references: [id])
+  ativo        Boolean  @default(true)
+  createdAt    DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Parametrização de complexidade do cliente (por núcleo)
+// ---------------------------------------------------------------------------
+
+model CriterioCliente {
+  id        String   @id @default(cuid())
+  nucleoId  String
+  nucleo    Nucleo   @relation(fields: [nucleoId], references: [id])
+  nome      String
+  descricao String?
+  peso      Float    @default(1)
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pontuacoes PontuacaoCriterioCliente[]
+}
+
+// nivel: N1 | N2 | N3 | N4
+model FaixaNivelCliente {
+  id           String @id @default(cuid())
+  nucleoId     String
+  nucleo       Nucleo @relation(fields: [nucleoId], references: [id])
+  nivel        String
+  pontuacaoMin Float
+  pontuacaoMax Float
+}
+
+// ---------------------------------------------------------------------------
+// Clientes
+// ---------------------------------------------------------------------------
+
+model Cliente {
+  id                   String    @id @default(cuid())
+  nome                 String
+  contato              String?
+  nivelOriginalTexto   String? // texto livre importado da planilha real ("baixa (pois é só pro labore)" etc) — apenas referência
+  observacoesHistorico String? // notas de histórico de responsáveis reconstruídas na importação
+  dataCadastro         DateTime  @default(now())
+  ativo                Boolean   @default(true)
+  deletedAt            DateTime?
+
+  nucleos        ClienteNucleo[]
+  pontuacoes     PontuacaoCriterioCliente[]
+  volumesMensais VolumeMensalCliente[]
+  alocacoes      Alocacao[]
+  tipos          ClienteTipo[]
+}
+
+model ClienteNucleo {
+  id        String  @id @default(cuid())
+  clienteId String
+  cliente   Cliente @relation(fields: [clienteId], references: [id])
+  nucleoId  String
+  nucleo    Nucleo  @relation(fields: [nucleoId], references: [id])
+
+  @@unique([clienteId, nucleoId])
+}
+
+// Tipo de cliente: configurável por núcleo (seção "Configuração" — cada núcleo define os seus).
+model TipoCliente {
+  id       String  @id @default(cuid())
+  nucleoId String
+  nucleo   Nucleo  @relation(fields: [nucleoId], references: [id])
+  nome     String
+  ativo    Boolean @default(true)
+
+  clientes ClienteTipo[]
+
+  @@unique([nucleoId, nome])
+}
+
+// Associa um cliente a um ou mais tipos, dentro de um núcleo específico (o mesmo cliente pode
+// ter tipos diferentes em núcleos diferentes, ex.: "Folha" no Pessoal, "Simples" no Fiscal).
+model ClienteTipo {
+  id            String      @id @default(cuid())
+  clienteId     String
+  cliente       Cliente     @relation(fields: [clienteId], references: [id])
+  nucleoId      String
+  nucleo        Nucleo      @relation(fields: [nucleoId], references: [id])
+  tipoClienteId String
+  tipoCliente   TipoCliente @relation(fields: [tipoClienteId], references: [id])
+
+  @@unique([clienteId, tipoClienteId])
+}
+
+// valor: 1-5 ; mesReferencia: "YYYY-MM" ou null (modo estático, vale até reavaliar)
+model PontuacaoCriterioCliente {
+  id            String          @id @default(cuid())
+  clienteId     String
+  cliente       Cliente         @relation(fields: [clienteId], references: [id])
+  nucleoId      String
+  nucleo        Nucleo          @relation(fields: [nucleoId], references: [id])
+  criterioId    String
+  criterio      CriterioCliente @relation(fields: [criterioId], references: [id])
+  valor         Int
+  mesReferencia String?
+  createdAt     DateTime        @default(now())
+}
+
+model VolumeMensalCliente {
+  id           String  @id @default(cuid())
+  clienteId    String
+  cliente      Cliente @relation(fields: [clienteId], references: [id])
+  mes          Int
+  ano          Int
+  nEmpregados  Int?
+  nSocios      Int?
+  nAutonomos   Int?
+  nEstagiarios Int?
+  ativo        Boolean @default(true)
+
+  @@unique([clienteId, mes, ano])
+}
+
+// ---------------------------------------------------------------------------
+// Colaboradores
+// ---------------------------------------------------------------------------
+
+// nivelTecnico: T1 | T2 | T3 | T4
+model Colaborador {
+  id                     String    @id @default(cuid())
+  nome                   String
+  nucleoId               String
+  nucleo                 Nucleo    @relation(fields: [nucleoId], references: [id])
+  nivelTecnico           String
+  dataAdmissao           DateTime?
+  ativo                  Boolean   @default(true)
+  deletedAt              DateTime?
+  remuneracaoTotal       Float     @default(0)
+  capacidadeMaximaPontos Float?
+  excecaoNivelClienteMax String? // override pontual da RegraCorrespondencia para este colaborador
+
+  historicoNiveis ColaboradorNivelHistorico[]
+  alocacoes       Alocacao[]
+  timesheets      TimesheetMensal[]
+  snapshots       CarteiraSnapshotMensal[]
+}
+
+model ColaboradorNivelHistorico {
+  id            String      @id @default(cuid())
+  colaboradorId String
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id])
+  nivelTecnico  String
+  dataInicio    DateTime    @default(now())
+}
+
+// nivel: T1 | T2 | T3 | T4
+model FaixaNivelColaborador {
+  id                    String  @id @default(cuid())
+  nucleoId              String
+  nucleo                Nucleo  @relation(fields: [nucleoId], references: [id])
+  nivel                 String
+  descricaoCompetencias String?
+}
+
+// nivelTecnico: T1..T4 -> nivelClienteMaximo: N1..N4 que esse nível pode atender
+model RegraCorrespondencia {
+  id                 String @id @default(cuid())
+  nucleoId           String
+  nucleo             Nucleo @relation(fields: [nucleoId], references: [id])
+  nivelTecnico       String
+  nivelClienteMaximo String
+
+  @@unique([nucleoId, nivelTecnico])
+}
+
+// ---------------------------------------------------------------------------
+// Alocação, eficiência e histórico
+// ---------------------------------------------------------------------------
+
+// origem: MANUAL | SUGESTAO
+model Alocacao {
+  id            String      @id @default(cuid())
+  clienteId     String
+  cliente       Cliente     @relation(fields: [clienteId], references: [id])
+  colaboradorId String
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id])
+  nucleoId      String
+  nucleo        Nucleo      @relation(fields: [nucleoId], references: [id])
+  dataInicio    DateTime    @default(now())
+  dataFim       DateTime?
+  origem        String
+}
+
+// Lançamento mensal de eficiência: um único campo direto (% de 0 a 100), sem cálculo de horas.
+model TimesheetMensal {
+  id            String      @id @default(cuid())
+  colaboradorId String
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id])
+  mes           Int
+  ano           Int
+  eficiencia    Float // 0 a 100
+  observacao    String?
+  ativo         Boolean     @default(true)
+
+  @@unique([colaboradorId, mes, ano])
+}
+
+model CarteiraSnapshotMensal {
+  id             String      @id @default(cuid())
+  colaboradorId  String
+  colaborador    Colaborador @relation(fields: [colaboradorId], references: [id])
+  mes            Int
+  ano            Int
+  pontuacaoTotal Float
+  nClientes      Int
+  createdAt      DateTime    @default(now())
+
+  @@unique([colaboradorId, mes, ano])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  acao       String
+  entidade   String
+  entidadeId String?
+  detalhe    String?
+  createdAt  DateTime @default(now())
+}
