@@ -1,0 +1,17 @@
+{
+    "name": "sannar/carteira-api",
+    "description": "API do Sistema de Carteira e Eficiência - Sannar Contabilidade (PHP/MySQL)",
+    "type": "project",
+    "require": {
+        "php": ">=8.1",
+        "ext-pdo": "*",
+        "ext-pdo_mysql": "*",
+        "phpoffice/phpspreadsheet": "^2.0",
+        "tecnickcom/tcpdf": "^6.7"
+    },
+    "autoload": {
+        "psr-4": {
+            "Sannar\\": "src/"
+        }
+    }
+}

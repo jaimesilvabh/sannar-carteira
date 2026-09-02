@@ -1,0 +1,11 @@
+# Roteia toda requisição para index.php (front controller), preservando o cabeçalho Authorization
+# se algum dia for usado, e sem exigir que o arquivo/caminho pedido exista fisicamente.
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [QSA,L]
+
+# Nunca serve os arquivos de configuração diretamente.
+<FilesMatch "^\.env">
+    Require all denied
+</FilesMatch>

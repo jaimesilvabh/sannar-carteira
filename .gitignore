@@ -4,6 +4,7 @@ build/
 *.log
 .env
 !server/.env.example
+!server-php/.env.example
 **/data/*.db
 **/data/*.db-journal
 .DS_Store
